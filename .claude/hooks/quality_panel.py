@@ -55,6 +55,8 @@ Rules for your verdict:
 - Never demand the impossible or invented. If the assistant honestly stated a real limit (no access,
   data doesn't exist, user must decide), accept it.
 - If the request is a quick question or chit-chat, hold it to that standard, not a research standard.
+- Work still running in the background (a workflow or task that notifies the assistant when it finishes)
+  is not a defect if the turn clearly reports its status; don't demand waiting for it.
 
 Reply with exactly one line of JSON and nothing else:
 {{"pass": true}}  or  {{"pass": false, "items": ["...", "..."]}}"""
