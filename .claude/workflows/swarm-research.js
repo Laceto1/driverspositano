@@ -22,7 +22,7 @@ const TODAY = args.today || 'today'
 const MAX_TRACKS = args.maxTracks || 24
 const MAX_GAPS = args.maxGaps === undefined ? 6 : args.maxGaps
 
-const NOTE = `Today is ${TODAY}. Load WebSearch/WebFetch with ToolSearch ("select:WebSearch,WebFetch") if needed. Prefer primary sources (official registries and directories, regulators, guidelines, systematic reviews, filings, original papers) over listicles and ads. Rank evidence: guidelines/systematic reviews > trials > smaller studies > opinion, and say which level each claim rests on. Literature: PubMed web pages show a bot check, so use https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&retmode=json&term=<q> / esummary.fcgi / efetch.fcgi, or https://www.ebi.ac.uk/europepmc/webservices/rest/search?format=json&query=<q>. The network only allows some hosts: if a fetch fails, do not retry it. Use WebSearch at most 6 times (shared budget). Do NOT write any files. Never invent names, numbers, dates or URLs: every item needs a source URL you actually saw.${args.sources ? '\nExtra sources: ' + args.sources : ''}`
+const NOTE = `Today is ${TODAY}. Load WebSearch/WebFetch with ToolSearch ("select:WebSearch,WebFetch") if needed. Prefer primary sources (official registries and directories, regulators, guidelines, systematic reviews, filings, original papers) over listicles and ads. Rank evidence: guidelines/systematic reviews > trials > smaller studies > opinion, and say which level each claim rests on. Literature: PubMed web pages show a bot check, so use https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&retmode=json&term=<q> / esummary.fcgi / efetch.fcgi, or https://www.ebi.ac.uk/europepmc/webservices/rest/search?format=json&query=<q>. The network only allows some hosts. WebFetch can fail with ENOTFOUND on hosts the environment does allow: when it does, fetch the same URL once with Bash instead: curl -sSL -m 30 -A 'Mozilla/5.0' '<url>' | head -c 30000 (print to stdout; never save files into the repo). If both fail, do not retry. Use WebSearch at most 6 times (shared budget). Do NOT write any files. Never invent names, numbers, dates or URLs: every item needs a source URL you actually saw.${args.sources ? '\nExtra sources: ' + args.sources : ''}`
 
 const ITEMS = {
   type: 'object',
@@ -109,8 +109,12 @@ const all = [...merged.values()]
 log(`Merged ${all.length} items; checks ${JSON.stringify(counts)}`)
 
 const RULES = `Today is ${TODAY}. Use ONLY the material given; never add facts. Items have check = verified | corrected | unverifiable: apply corrections; mark unverifiable items "(unconfirmed)". Cite sources as markdown links.`
+// Group categories so small ones don't each get a writer: keep the 7 biggest with 4+ items, fold the rest into "Other findings".
+const catSize = {}
+for (const it of all) catSize[it.category] = (catSize[it.category] || 0) + 1
+const keep = new Set(Object.entries(catSize).filter(([, n]) => n >= 4).sort((a, b) => b[1] - a[1]).slice(0, 7).map(([c]) => c))
 const byCat = {}
-for (const it of all) (byCat[it.category] = byCat[it.category] || []).push(it)
+for (const it of all) { const c = keep.has(it.category) ? it.category : 'Other findings'; (byCat[c] = byCat[c] || []).push(c === it.category ? it : { ...it, details: `[${it.category}] ${it.details}` }) }
 const jobs = []
 for (const [cat, items] of Object.entries(byCat)) {
   let cur = []
