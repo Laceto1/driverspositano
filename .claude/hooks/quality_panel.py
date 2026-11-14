@@ -183,6 +183,12 @@ def main():
     key = str(idx)
     if state.get(key, 0) >= RETRIES:
         return
+    # Run once per round even if the panel is installed twice (system-wide and in a repo).
+    lock = os.path.join("/tmp", "claude-panel-lock-%s-%s-%d" % (data.get("session_id", "x"), key, state.get(key, 0)))
+    try:
+        os.close(os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY))
+    except FileExistsError:
+        return
 
     request = text_of(entries[idx]["message"]["content"])
     answer = "\n".join(
