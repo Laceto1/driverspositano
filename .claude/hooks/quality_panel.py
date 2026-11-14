@@ -191,6 +191,15 @@ def main():
         return
 
     request = text_of(entries[idx]["message"]["content"])
+    # Messages the user typed while Claude was working are stored as queued entries,
+    # not as user messages. They are part of the request.
+    queued = []
+    for e in entries[idx + 1:]:
+        c = e.get("content")
+        if e.get("type") == "queue-operation" and e.get("operation") == "enqueue" and isinstance(c, str) and c.strip() and c not in queued:
+            queued.append(c.strip())
+    if queued:
+        request += "\n\n[Further messages the user sent while the assistant was working; they are part of the request:]\n" + "\n".join("- " + q for q in queued)
     answer = "\n".join(
         p for p in (
             text_of((e.get("message") or {}).get("content"))
