@@ -4,7 +4,10 @@ answered the user's latest request. If not, it blocks the stop and sends Claude
 back with a list of what is missing.
 
 Safety:
-- Runs at most once per turn (respects stop_hook_active), so it can never loop.
+- Sends Claude back at most CLAUDE_COMPLETENESS_RETRIES times (default 3) per
+  request, so it can never loop forever.
+- The judge sees tool calls AND tool results, so it judges evidence, not just
+  claims (the known weakness of the built-in /goal judge).
 - Fails open: any error, timeout or unparseable verdict lets Claude stop.
 - Set CLAUDE_COMPLETENESS_CHECK=off to disable it for a session.
 """
@@ -14,6 +17,7 @@ import subprocess
 import sys
 
 MAX_CHARS = 60000
+MAX_RETRIES = int(os.environ.get("CLAUDE_COMPLETENESS_RETRIES", "3"))
 JUDGE_MODEL = os.environ.get("CLAUDE_COMPLETENESS_MODEL", "sonnet")
 
 JUDGE_PROMPT = """You are a strict reviewer checking whether an AI assistant fully completed a user's request.
@@ -29,7 +33,8 @@ JUDGE_PROMPT = """You are a strict reviewer checking whether an AI assistant ful
 Judge ONLY against what the user actually asked. Mark INCOMPLETE if any of these hold:
 - A part of the request was skipped, only partly done, or deferred without a real blocker.
 - The answer is cut off, uses placeholders ("TODO", "...", "rest omitted"), or promises work it never did.
-- It claims something was done or verified but the turn shows no evidence of it.
+- It claims something was done or verified but the tool calls/results show no evidence of it,
+  or the tool results contradict the claim (e.g. a test that failed reported as passing).
 - It contains a clear factual or logical error that changes the outcome.
 Do NOT mark INCOMPLETE for style, brevity, or for stopping to ask a genuinely necessary question,
 or for honestly reporting a real blocker (missing access, permission denied) it could not get past.
@@ -51,6 +56,11 @@ def text_of(content):
             parts.append(block.get("text", ""))
         elif block.get("type") == "tool_use":
             parts.append("[tool call: %s %s]" % (block.get("name"), json.dumps(block.get("input"))[:400]))
+        elif block.get("type") == "tool_result":
+            res = block.get("content")
+            if isinstance(res, list):
+                res = " ".join(b.get("text", "") for b in res if isinstance(b, dict))
+            parts.append("[tool result: %s]" % str(res or "")[:600])
     return "\n".join(p for p in parts if p)
 
 
@@ -74,8 +84,6 @@ def main():
         return  # we are the judge's own nested session
 
     data = json.load(sys.stdin)
-    if data.get("stop_hook_active"):
-        return  # already sent back once this turn; let it stop
 
     path = data.get("transcript_path")
     if not path or not os.path.exists(path):
@@ -97,11 +105,23 @@ def main():
     if last_prompt_idx is None:
         return
 
+    # Retry cap: send Claude back at most MAX_RETRIES times per user request.
+    state_file = os.path.join("/tmp", "claude-completeness-%s.json" % data.get("session_id", "x"))
+    try:
+        with open(state_file) as f:
+            state = json.load(f)
+    except Exception:
+        state = {}
+    key = str(last_prompt_idx)
+    if state.get(key, 0) >= MAX_RETRIES:
+        return
+
     request = text_of(entries[last_prompt_idx]["message"]["content"])
+    # The assistant's text and tool calls, plus tool results, so the judge sees evidence.
     answer_parts = [
         text_of((e.get("message") or {}).get("content"))
         for e in entries[last_prompt_idx + 1:]
-        if e.get("type") == "assistant" and not e.get("isSidechain")
+        if e.get("type") in ("assistant", "user") and not e.get("isSidechain")
     ]
     if data.get("last_assistant_message"):
         answer_parts.append(str(data["last_assistant_message"]))
@@ -129,6 +149,12 @@ def main():
         return
 
     if verdict.get("complete") is False:
+        state[key] = state.get(key, 0) + 1
+        try:
+            with open(state_file, "w") as f:
+                json.dump(state, f)
+        except Exception:
+            pass
         missing = verdict.get("missing") or ["the reviewer found the request incompletely answered"]
         reason = (
             "Completeness check: an independent reviewer found your response does not fully answer "
