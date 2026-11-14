@@ -4,20 +4,21 @@ Index for this workspace. Open the files below only when the task needs them.
 
 ## Files
 - `deliverables/` — finished client documents (PDFs). Read the relevant one before any work on that campaign.
+- `.claude/hooks/quality_panel.py` — the review panel that judges every answer (see below).
 - `.claude/agents/response-reviewer.md` — independent reviewer; use it on big multi-part deliverables before handing them over.
-- `.claude/hooks/completeness_check.py` — the automatic completeness judge (see below).
 - `.claude/skills/digest-media/` — turns a video/post URL into title, description and full transcript.
 
 ## How work is done here
 - Every request is treated as a brief: task, guardrails, definition of done. If the user gives no definition of done, write one line stating it at the start and check the result against it at the end.
-- Turn the definition of done into a pass/fail check you can actually run (a script, a diff, a field-by-field comparison against the source) and show its output as evidence.
+- Research, lists and "find the best X" requests: before searching, map the full universe of sources a top expert would use (official registries, government and industry databases, directories, APIs, papers, filings, trial registries, communities), including non-obvious ones. Cover them with parallel subagents, open and cite the actual sources, cross-check, and give the ranking criteria.
 - Work as a swarm by default: any task with two or more independent parts (pages, sources, files, sections, checks) is split across parallel subagents, then merged and cross-checked. Only one-step tasks and quick questions stay single-agent.
-- Long research or connector-heavy steps go in a subagent so the main chat stays clean.
-- Video or post links (YouTube, X, TikTok, Instagram): use the `digest-media` skill (`.claude/skills/digest-media/SKILL.md`) to get the transcript before answering. Don't try to play them in the browser.
+- Turn the definition of done into a pass/fail check you can actually run (a script, a diff, a field-by-field comparison against the source) and show its output as evidence.
+- Video or post links (YouTube, X, TikTok, Instagram): use the `digest-media` skill to get the transcript before answering. Don't try to play them in the browser.
 
 ## Boundaries
 - Never send emails, messages or posts on the user's behalf without them saying so in that request.
-- Never push to `master`; work on a branch and open a draft PR.
+- Never push to `master`; work on a branch and open a draft PR (enforced by a hook).
 
-## Automatic check
-After each turn a separate Claude compares the response (including tool results) with the latest request and sends the session back to finish anything missing, up to 3 times per request. Disable for a session with `CLAUDE_COMPLETENESS_CHECK=off`; change the judge with `CLAUDE_COMPLETENESS_MODEL` (default `sonnet`) and the retry cap with `CLAUDE_COMPLETENESS_RETRIES`.
+## Review panel (automatic)
+After each turn, a fast triage decides quick vs substantial. Quick turns get one completeness judge. Substantial turns get five blind, independent judges in parallel: Completeness, Evidence, Coverage (sources an expert would use), Blind spots (what the user didn't think to ask) and Depth. Any must-fix item sends the session back, up to 3 rounds per request.
+Env knobs: `CLAUDE_PANEL=off`, `CLAUDE_PANEL_RETRIES`, `CLAUDE_PANEL_MODEL` (default sonnet), `CLAUDE_PANEL_DEEP_MODEL` (default opus, used by Coverage and Blind spots), `CLAUDE_PANEL_FAST_MODEL` (default haiku, triage).

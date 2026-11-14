@@ -18,9 +18,9 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 -I \"$CLAUDE_PROJECT_DIR/.claude/hooks/completeness_check.py\"",
-            "timeout": 180,
-            "statusMessage": "Reviewer checking the response is complete..."
+            "command": "python3 -I \"$CLAUDE_PROJECT_DIR/.claude/hooks/quality_panel.py\"",
+            "timeout": 330,
+            "statusMessage": "Review panel judging the answer..."
           }
         ]
       }
