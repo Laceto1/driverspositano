@@ -22,6 +22,7 @@ import subprocess
 import sys
 
 MAX_CHARS = 60000
+CONTEXT_CHARS = 15000
 RETRIES = int(os.environ.get("CLAUDE_PANEL_RETRIES", "3"))
 FAST_MODEL = os.environ.get("CLAUDE_PANEL_FAST_MODEL", "haiku")
 MODEL = os.environ.get("CLAUDE_PANEL_MODEL", "sonnet")
@@ -29,7 +30,15 @@ DEEP_MODEL = os.environ.get("CLAUDE_PANEL_DEEP_MODEL", "opus")
 
 COMMON = """You are one member of an independent review panel. You did not write the work below and have
 no stake in it passing. Other judges cover other angles; stick to yours. The assistant's own claims are
-not evidence; only tool results are.
+not evidence; only tool results are, including tool results in the earlier conversation.
+
+Long tool inputs and results are clipped in this view; never report clipping itself as a defect.
+Only call something wrong or fabricated if the material shown proves it; facts you cannot see
+(environment conventions, earlier sessions) are not errors.
+
+<earlier_conversation reference_only="true">
+{context}
+</earlier_conversation>
 
 <user_request>
 {request}
@@ -99,12 +108,12 @@ def text_of(content):
         if t == "text":
             parts.append(block.get("text", ""))
         elif t == "tool_use":
-            parts.append("[tool call: %s %s]" % (block.get("name"), json.dumps(block.get("input"))[:500]))
+            parts.append("[tool call: %s %s]" % (block.get("name"), json.dumps(block.get("input"))[:3000]))
         elif t == "tool_result":
             res = block.get("content")
             if isinstance(res, list):
                 res = " ".join(b.get("text", "") for b in res if isinstance(b, dict))
-            parts.append("[tool result: %s]" % str(res or "")[:800])
+            parts.append("[tool result: %s]" % str(res or "")[:1500])
     return "\n".join(p for p in parts if p)
 
 
@@ -186,6 +195,14 @@ def main():
     if not answer:
         return
     request, answer = request[-MAX_CHARS:], answer[-MAX_CHARS:]
+    # Earlier conversation (reference only), so judges know what was already established.
+    context = "\n".join(
+        p for p in (
+            text_of((e.get("message") or {}).get("content"))
+            for e in entries[max(0, idx - 60):idx]
+            if e.get("type") in ("assistant", "user") and not e.get("isSidechain")
+        ) if p
+    )[-CONTEXT_CHARS:] or "(none)"
 
     tier = ask(FAST_MODEL, TRIAGE.format(request=request), timeout=45).lower()
     judges = {"Completeness": JUDGES["Completeness"]} if tier.startswith("quick") else JUDGES
@@ -193,7 +210,7 @@ def main():
     findings = {}
     with cf.ThreadPoolExecutor(max_workers=len(judges)) as pool:
         futs = {
-            pool.submit(ask, model, COMMON.format(request=request, answer=answer) + "\n\n" + brief): name
+            pool.submit(ask, model, COMMON.format(context=context, request=request, answer=answer) + "\n\n" + brief): name
             for name, (model, brief) in judges.items()
         }
         for fut in cf.as_completed(futs):
