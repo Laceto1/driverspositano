@@ -1,5 +1,6 @@
 {
-  "workflowSizeGuideline": "large",
+  "workflowSizeGuideline": "unrestricted",
+  "ultracode": true,
   "hooks": {
     "PreToolUse": [
       {
