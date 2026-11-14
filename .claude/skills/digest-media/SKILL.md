@@ -11,7 +11,8 @@ description: Watch/digest a YouTube, X (Twitter), TikTok, Instagram or Facebook 
 2. Long transcripts (> ~20k chars): hand the file to a subagent to extract the concrete steps, tools and commands, so the main chat stays clean.
 3. Exit code 3 with `NO_KEY`: the Supadata key is missing.
    - Cloud session: call `request_credential` for host `api.supadata.ai`, header `x-api-key`, no prefix. Then retry once.
-   - Local: ask the user to `export SUPADATA_API_KEY=...` (free key at https://dash.supadata.ai).
+   - Local: ask the user to `export SUPADATA_API_KEY=...` (key at https://dash.supadata.ai).
+   - No key at all: ask the user to paste the transcript (YouTube: "...more" → "Show transcript" on a computer) or screenshots, or to run this in a Claude Code session on their own computer, where their own browser can open the link.
 4. The transcript only covers what is *said*. If the video is mainly on-screen (code, settings, UI) with little speech, say so and ask for screenshots of the key moments.
 
 ## Gotchas
