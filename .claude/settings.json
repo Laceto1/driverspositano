@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 -I \"$CLAUDE_PROJECT_DIR/.claude/hooks/completeness_check.py\"",
+            "timeout": 180,
+            "statusMessage": "Reviewer checking the response is complete..."
+          }
+        ]
+      }
+    ]
+  }
+}
