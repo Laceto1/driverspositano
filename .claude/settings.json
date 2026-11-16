@@ -1,0 +1,29 @@
+{
+  "workflowSizeGuideline": "unrestricted",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "if": "Bash(git push*)",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/block_master_push.sh\""
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 -I \"$CLAUDE_PROJECT_DIR/.claude/hooks/quality_panel.py\"",
+            "timeout": 330,
+            "statusMessage": "Review panel judging the answer..."
+          }
+        ]
+      }
+    ]
+  }
+}
